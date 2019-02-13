@@ -1,0 +1,320 @@
+------------------------    Protocole de comunicare    ------------------------
+
+Tema 2 : iBank
+Nume : Niculescu
+Prenume : Mihai Alexandru
+Grupa : 325CB
+Sistem de operare : Ubuntu 18.04 LTS 64bit 
+Editor : CLion 2018.1
+Compilator : gcc version 7.3.0 (Ubuntu 7.3.0-16ubuntu3) 
+Fisiere: client.c, function-client.c, function-client.h, 
+         server.c, function-server.c, function-server.h,
+         utils/database.c, utils/database.h, utils/define.h
+         Makefile, users_data_file, README
+-------------------------------------------------------------------------------
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< Strunctura temei >>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    Tema implenenteza o aplicatie de tipul internet banking. Pentru trimiterea
+datelor s-a folosit conexiunea TCP si UDP specificata in enuntul temei.
+Pentru multiplexare I/O am folosit select atat in srver cat si in client.
+
+    Pentru a memora datale referitoare la contul bancar, daca este blocat, 
+cine incerca sa il debloce etc. am creat strcutura : Database.
+    structura pentru memeorarea informatilor utile despre un cont:
+ * banckAccounts    -> informatiile despre conturile bancare citite din fisier
+ * socket_client    -> socket - ul clientui care reuserte sa logeze cu succes
+                        pentru respectivul cont
+ * failed_attempts  -> numarul de incercari nereusite, el indica daca un cont
+                       este blocat sau nu
+ * id_unlock        -> id-ul clientului care incearca sa debloche contul
+ * data_transfers   -> datele privind transfer-ul in curs de desfesurare
+                        se foloste acest vector pentru a nu bloca servarul pana
+                        primim raspuns de la client
+ * numberAccounts   -> numarul total de conturi bancare\
+ 
+ Struncturile ajutatore sunt:
+I) BanckAccount:
+ * surname          -> nume
+ * name             -> prenume
+ * numberCard       -> numarul cardului
+ * pin              -> pin
+ * secret_password  -> parola secreta
+ * sold             -> sold-ul disponibil
+
+II) Data_Transfer: 
+ * index_beneficiary    ->  index-ul contului carulia dorim sa tarnsferm
+                            indicele din vectorului banckAccounts din Database
+ * sum                  ->  suma pe care vrem sa o transferam
+ In structura Database exista : pentru indicele i este asociat contul
+banckAccounts[i], la care este logat clinetul cu  socket_client[i](daca nu 
+este logat nici un clinet este -1), failed_attempts[i] care zice daca este 
+blocat daca este blocat sau nu este blocat si este 0, id_unlock[i] este id 
+clientului care incearca sa deblocheze contul(daca nu incerca nici un client
+este -1), data_transfers[i] datele pentru trimiterea sumei de bani de la 
+contul current la alt cont, exista pentru a nu blocat servarul pana primin
+raspuns de la un client. 
+
+    Functile pentru database se afla in utils/database.c unde se afla si 
+define.h pentru constante si macro-ul pentru CHECK. Pentru nume, premume este 
+numesiunea maxima(specificata in enunt) + 1 pentru terminator de sir.
+
+init_database :
+ * Fuctia care aloca memeria pentru database utilizat in program si le
+ * citerste/initializeaza
+ * @param users_data_file fisierul de unde se citersc datele
+ * @return pointerul catre zona de memorie unde a fost alocat
+ 
+free_database:
+ * Funtia pentru eliberarea memorie pentru un elemet de tipul Database
+ * @param pDatabase adrea unde eliberam memoria
+
+get_index_numberCard:
+ * Cauta daca exista repectivul card
+ * @param database baza de data unde cautam
+ * @param numberCard numarul cardului pe care il cautam
+ * @return daca a gasit indicele altfel NOT_CONTAINS
+
+get_index_socket:
+ * Cauta daca exista repectivul client
+ * @param database database baza de data unde cautam
+ * @param socket socket-ul clientului care il cautam
+ * @return daca a gasit indicele altfel NOT_CONTAINS
+
+    Pentru server exista : server.c care apleaza start_server din 
+functio-server.c, pentru server se foloste adresa "127.0.0.1"
+
+start_server:
+ * functi crear initializeza database, porneste servarul si elibereza database
+ * @param IP ip server
+ * @param port port server
+ * @param users_data_file fisierul de unde se citest datele
+ * @return 0
+
+run_server:
+ * functia care efectual efectiv comportamentul servarului
+ * initializeaza conxiune TCP si UDP, accepta noi ceriri de conectare, primeste
+ * comenzile de pe TCP si le paseaza lui run_comman, daca primeste pe UDP atunci
+ * incepe procedura de unlock, iar daca citeste de la tastarul "quit" se inchide
+ * @param IP ip server-ului
+ * @param port port-ul server-ului
+ * @param database baza de date citita
+
+run_command:
+ * functia care execta comenzile primita pe TCP de la client
+ * @param socket_client socket-utul clientului care a trimis comanda sau
+ *                      raspunsul (ex. raspunsul la transfer)
+ * @param buffer primit de la recv
+ * @param database baza de date actula
+ * @param quit data tremui sa inchidem respentivul client
+
+
+    Perntru client exista clint.c care apeleza start_client din 
+function-client.c.:
+
+start_client:
+ * functia care citeste din la STDIN si trmite respentiva comneta servarului
+ * in functie de ce primeste de la server afiseaza mesajul la stdout si il
+ * scire in fisier, initializeaza conesiunea cu servarul
+ * @param IP_sever ip-ul serverului
+ * @param port port-ul server-ului
+
+    In continuare vom preenta implementarea fiecarei functii.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!                                                                 !!!!!!!
+!!!!!!!    Compliarea cu alt compilator decat cel sepecificat si        !!!!!!!
+!!!!!!!     rularea pe alt sistem de operare poate se duca la probleme  !!!!!!!
+!!!!!!!                                                                 !!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  login   >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    Comenda login. Pentru acesta am exista functia login din function-server.c
+si function-client.c. Pentru login am considerat ca un cont este blocat cand 
+acelasi client/proces gresete pin-ul pentru acelasi cont de 3 ori la rand "fara
+ sa intercalezi alte comenzi intre ele." prin comanda intelg si logout si 
+listsold etc. nu doar login pentru alt card. Asa cum este specifiat pe forum:
+http://cs.curs.pub.ro/2017/mod/forum/discuss.php?d=2899&parent=11072
+PS : Daor parere personal, mi se putin cam nesigur sa resetezi contorul pentru
+ori care comnda, se poate aplica brute-force si se poate gasis usor pinul mai
+ca este de doar 4 cifre...
+    Pentru acesta clientul tine contorul, numberFailedLog care se reseteza dupa
+modul prezenta pe forum.Se pute tine in server o lista cu numarul de incercari
+esuate pentru fieacare client dar updata-ul ar fi costa O(n) timp si ca spaiu
+ar fi fost O(n), fata de varianta alesa care are O(1) timp si spatiu.
+
+SERVR:
+login:
+ * funtia crea realizeaza logarea unui client, cauta sa vada daca carul exista
+ * daca nu cumva este blocat, daca este logat deja un alt client pentru
+ * respentivul cont, daca punul este corect, daca toate conditile sunt
+ * indeplinite asaociaza clentului contul
+ * @param socket_client socket-ul cleeintului care face logare
+ * @param numberCard pentru care se inceaca logarea
+ * @param pin pinul cardului
+ * @param database baza de date acuatla
+ * @param numberFailedLog numarul de incrcari neresiute consecutiv
+ * @return daca atentificare este nu este reusite intoarece codul de eroare
+ *          specificat, daca s-a reusit intoarece 0
+
+CLINET:
+login:
+ * funtia care transmite servarlui login-ul astfel:
+ * in primi 10 bytes se afla comnada login
+ * in urmatori : numaurul cardului
+ * in urmatori : pin-ul
+ * in urmatori : numberFailedLog
+ * daca nu suntem logati daca suntem logati printeza mesajul de eroare
+ * primeste raspunsul de la server si afisseaza mesajul corespunzator
+ * daca s-a reusit login-ul cu succes marcheza isLogged TRUE
+ * @param socket_tcp pentru primiterea datelor
+ * @param logging starea clientului
+ * @param output fiserul de iesire
+ * @param numberFailedLog numarul de incercari esuate
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  logout  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    Clientul verifica daca este logat, daca da trimite care server. Server il 
+deconecteza si reseteza toate informatiele de logare pt respetivul cont.
+
+SERVER:
+logout:
+ * functia care delegeaza un client resetand toate informatiele de logare pt
+ * respetivul cont, din cauza  modului de funtionare, niciodata clientul nu
+ * o sa trimita logout daca nu este logat , nu va return ERROR
+ * @param database baza de datae actala
+ * @param socket_client socket-ul clientului care face logare
+ * @return din cauza  modului de funtionare, niciodata clientul nu o sa trimita
+ *          logout daca nu este logat , nu va return ERROR si doar 0
+ 
+
+CLEINT:
+logout:
+ * functia care realizeza delogare, transmite mesajul si primiteza rezulatul
+ * @param socket_tcp pentru primiterea datelor
+ * @param logging  starea clientului
+ * @param output fiserul de iesire
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  listsold >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    Clinetul verifiaca daca logat daca face cerea de listsold si afiseza 
+reaspunsul, daca nu afiseaza mesajul conrespunzator.
+
+SERVER:
+listsold:
+ * Functia care returneza sold-ul curent
+ * @param database baza de datae actuala
+ * @param socket_client socket-ul clientului care face logare
+ * @return suma de bani disponibila, din cauza  modului de funtionare, niciodata
+ * clientul nu o sa trimita istsod daca nu este logat
+
+CLIENT:
+listsold:
+ * functia care realizeza listsold, transmite mesajul si primiteza rezulatul
+ * @param socket_tcp pentru primiterea datelor
+ * @param logging  starea clientului
+ * @param output fiserul de iesire
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  transfer  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    Implemntare comenzi de transfer pe parte de server, a reprezenta spargerea
+in doua. Mai intai se verifica daca se poate realiza transfer, (daca exista 
+bani daca exista beneficiarul etc.) apoi mutare efevtiva a banilor in functie
+de rapunsul clientul am facut asta pentru a nu astepta raspunsul clindului si 
+a bloca servarului. De aceea exist data_transfers in database. Raspunsul este 
+afirmativ doar cand se primalitera este 'y'.
+
+SERVER:
+canTransfer:
+ * funtia daca care spune daca se poate realizeza transferul
+ * daca da marcheza data_transfer din database corespunzataore contului
+ * @param database baza de datae actuala
+ * @param socket_client socket-ul clientului care face transfer
+ * @param sum socket-ul clientului care face logare
+ * @param beneficiary numarului cui vrem sa tranferman
+ * @return un cod de erorare daca nu sunt bani/ nu exita numarul cardlui
+ *          altfel index-ul beneficiarului
+
+transfer:
+ *  Functia care realizeza efectiv trasferul
+ * @param database baza de datae actuala
+ * @param socket_client socket-ul clientului care face transfer
+
+CLIENT:
+transfer:
+ * functia transite  servarului comnada transfer astfel:
+ * in primi 10 bytes : "trasfer"
+ * in urmatori : numarul cardului beneficiarului
+ * in urmatori : suma de trasferat
+ * daca raspunsul este pozitiv de la server transmite raspunsul utilizatorui
+ * @param socket_tcp pentru primiterea datelor
+ * @param logging  starea clientului
+ * @param output fiserul de iesire
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  unlock  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    Pentru a nu tine blocat servarul se aplica aceiasi logica cala trasfer.
+Astefel este imparti in 2 parte de unlock. Exista id_unlock pt fiecare daca 
+cineva deja a inceput procedura de unlock.
+
+SERVER:
+check_unlock:
+ * Fucunctia care verifica daca se poate face unlock pt un card
+ * @param database baza de date acuatla
+ * @param numberCard pentru care se inceaca unlock
+ * @return 0 daca se poate atfel cod-ul de erorare
+
+unlock:
+ * Functia care realizeaza unlock
+ * @param database baza de date acuatla
+ * @param numberCard pentru care se inceaca unlock
+ * @param secret_password parola secreta
+ * @return daca unlock avut loc cu succes
+
+CLIENT:
+unlock:
+ * Functia care realizeza unlock
+ * pentru cerea de unlock trimite astfe in buffer:
+ * primi 10 "unlock"
+ * apoi unmatori numarul cardului
+ * apoit id-ul procesului curent
+ * Daca este afirmativ tramite catre server astfel:
+ * primi 10 numarul cardului
+ * apoi paroloa secreta
+ * @param socket_udp  pentru primiterea datelor
+ * @param logging  starea clientului
+ * @param output fiserul de iesire
+ * @param IP_sever ip-ul serverului
+ * @param port port-ul server-ului
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  quit-client  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    Cand se citeste de la tastaura "quit" clientul trimite mesajul servarului
+si iese din while. Serverul can primiste quit apelaza logout pt clint si 
+inchide conexiunea cu el. 
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  quit-server  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    Cand se citeste "quit" de la tastura se iese din while(TRUE) apoi se 
+trimite mesajul de quit clientilor si inchid cu close client apoi socket-ii pt
+UDP si TCP. S-ar putem sa mai existe inca conxiunea dupa ce am dat close:
+http://www.softlab.ntua.gr/facilities/documentation/unix/unix-socket-faq/unix-socket-faq-2.html#time_wait
+Din acest motiv serverul trimite mai intai mesajele apoi sta 2 secunde si 
+inchide toate conexiunile dupa aceea si se inchide.
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<   Makefile  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    Pentru runlare exista regula  run_server pt server si run_clinet pt clinet.
+    Clean elimina fisierele obiect si executabile, pt fisierele *.log exista
+regula clean_log.
+    Daor pt complilarea execuatabilelor build.
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
