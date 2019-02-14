@@ -317,4 +317,6 @@ inchide toate conexiunile dupa aceea si se inchide.
     Clean elimina fisierele obiect si executabile, pt fisierele *.log exista
 regula clean_log.
     Daor pt complilarea execuatabilelor build.
+    make run_server
+    make run_client
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
